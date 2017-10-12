@@ -1,0 +1,24 @@
+{
+  "name": "damoclark/simple-cors",
+  "description": "Simple Library for sending CORS headers",
+  "minimum-stability": "dev",
+  "type": "library",
+  "require": {},
+  "extra": {
+    "branch-alias": {
+      "dev-master": "1.0-dev"
+    }
+  },
+  "autoload": {
+    "psr-4": {
+      "damoclark\\SimpleCors\\": "src/"
+    }
+  },
+  "license": "LGPL-3.0",
+  "authors": [
+    {
+      "name": "Damien Clark",
+      "email": "damo.clarky@gmail.com"
+    }
+  ]
+}
