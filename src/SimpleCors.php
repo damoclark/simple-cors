@@ -111,6 +111,7 @@ class SimpleCors
 			return true ;
 
 		if (true !== $check = $this->checkCORSRequestConditions()) {
+			HTTP\Sapi::sendResponse($this->response) ;
 			return $check;
 		}
 
@@ -170,43 +171,47 @@ class SimpleCors
 	private function sendPreflightResponseHeaders()
 	{
 		if ($this->options['supportsCredentials']) {
-			header('Access-Control-Allow-Credentials: true') ;
+			$this->response->setHeader('Access-Control-Allow-Credentials','true') ;
 		}
 
-		header("Access-Control-Allow-Origin: {$this->request->getHeader('Origin')}");
+		$this->response->setHeader("Access-Control-Allow-Origin",$this->request->getHeader('Origin')) ;
 
 		if ($this->options['maxAge']) {
-			header("Access-Control-Max-Age: {$this->options['maxAge']}");
+			$this->response->setHeader("Access-Control-Max-Age",$this->options['maxAge']) ;
 		}
 
 		$allowMethods = $this->options['allowedMethods'] === true
 		 ? strtoupper($this->request->getHeader('Access-Control-Request-Method'))
 		 : implode(', ', $this->options['allowedMethods']);
-		header("Access-Control-Allow-Methods: $allowMethods");
+		$this->response->setHeader("Access-Control-Allow-Methods", $allowMethods) ;
 
 		$allowHeaders = $this->options['allowedHeaders'] === true
 		 ? strtoupper($this->request->getHeader('Access-Control-Request-Headers'))
 		 : implode(', ', $this->options['allowedHeaders']);
 		if($allowHeaders != '')
-			header("Access-Control-Allow-Headers: $allowHeaders");
+			$this->response->setHeader("Access-Control-Allow-Headers", $allowHeaders) ;
 
 		if ($this->options['exposedHeaders']) {
-			header("Access-Control-Expose-Headers: {implode(', ', $this->options['exposedHeaders'])}");
+			$this->response->setHeader("Access-Control-Expose-Headers", implode(', ', $this->options['exposedHeaders'])) ;
 		}
 
+		// Send the headers
+		HTTP\Sapi::sendResponse($this->response) ;
 		return true;
 	}
 
 	private function checkCORSRequestConditions()
 	{
 		if (!$this->checkOrigin()) {
-			error_log("SimpleCors: Bad Origin") ;
-			return $this->sendBadRequestResponse(403);
+			$this->response->setStatus(403) ;
+			$this->response->setBody("Bad Origin") ;
+			return false ;
 		}
 
 		if (!$this->checkMethod()) {
-			error_log("SimpleCors: Bad Method") ;
-			return $this->sendBadRequestResponse(405);
+			$this->response->setStatus(405) ;
+			$this->response->setBody("Bad Method") ;
+			return false ;
 		}
 
 		$requestHeaders = array();
@@ -217,19 +222,14 @@ class SimpleCors
 
 			foreach ($requestHeaders as $header) {
 				if (!in_array(trim($header), $this->options['allowedHeaders'])) {
-					error_log("SimpleCors: Disallowed header") ;
-					return $this->sendBadRequestResponse(403) ;
+					$this->response->setStatus(403) ;
+					$this->response->setBody("Disallowed header") ;
+					return false ;
 				}
 			}
 		}
 
 		return true;
-	}
-
-	private function sendBadRequestResponse($code)
-	{
-		http_response_code($code) ;
-		return false ;
 	}
 
 	private function isSameHost()
@@ -258,9 +258,6 @@ class SimpleCors
 		}
 
 		$requestMethod = $this->request->getHeader('Access-Control-Request-Method');
-		error_log('header [Access-Control-Request-Method]='.json_encode($requestMethod)) ;
-		error_log('headers='.json_encode($this->request->getHeaders())) ;
-		error_log('method='.json_encode($this->request->getMethod())) ;
 		if($requestMethod !== null)
 			return in_array($requestMethod, $this->options['allowedMethods']);
 
