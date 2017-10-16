@@ -8,6 +8,9 @@
 
 namespace damoclark\SimpleCors;
 
+use Sabre\HTTP ;
+
+require_once(__DIR__.'/../vendor/autoload.php') ;
 
 class SimpleCors
 {
@@ -27,17 +30,49 @@ class SimpleCors
 
 	private $configPath = null ;
 
-	public function __construct($varname = 'CORSCONF')
+	private $request = null ;
+
+	private $response = null ;
+
+	/**
+	 * SimpleCors constructor.
+	 *
+	 * @param string $varname Environment variable name that holds path to .ini file with CORS configuration (defaults to 'CORSCONF')
+	 * @param HTTP\RequestInterface|null $request Request object - or if not provided, internally will call HTTP\Sapi::getRequest()
+	 * @param HTTP\Response|null $response Response object - or if not provided, internally will call new HTTP\Response()
+	 */
+	public function __construct($varname = 'CORSCONF',$request = null,$response = null)
 	{
+		if($request == null)
+		{
+			$request = HTTP\Sapi::getRequest() ;
+		}
+		$this->request = $request ;
+
+		if($response == null)
+		{
+			$response = new HTTP\Response() ;
+		}
+		$this->response = $response ;
+
 		if($varname != null)
 		{
 			$this->varname = $varname ;
 			$this->configPath = getenv($varname) ;
-			$this->options = $this->normaliseOptions($this->loadConfigFile($this->configPath)) ;
-			$this->setRequestHeaders() ;
+			$this->loadConfig($this->configPath) ;
 		}
 	}
 
+	public function loadConfig($configFilename)
+	{
+		$this->options = $this->normaliseOptions($this->loadConfigFile($this->configPath)) ;
+	}
+
+	/**
+	 * @param $configFilename
+	 * @return array|bool
+	 * @throws \Exception
+	 */
 	public function loadConfigFile($configFilename)
 	{
 		if($configFilename == null)
@@ -62,14 +97,14 @@ class SimpleCors
 
 	public function isCorsRequest()
 	{
-		return $this->hasHeader('Origin') && !$this->isSameHost();
+		return $this->request->hasHeader('Origin') && !$this->isSameHost();
 	}
 
 	public function isPreflightRequest()
 	{
 		return $this->isCorsRequest()
-		 && $_SERVER['REQUEST_METHOD'] === 'OPTIONS'
-		 && $this->hasHeader('Access-Control-Request-Method') ;
+		 && $this->request->getMethod() === 'OPTIONS'
+		 && $this->request->hasHeader('Access-Control-Request-Method') ;
 	}
 
 	public function handlePreflightRequest()
@@ -99,23 +134,6 @@ class SimpleCors
 			return false ; // If preflight, should not continue no matter what
 		}
 		return $this->handlePreflightRequest();
-	}
-
-	/**
-	 * Set the request headers for this instance
-	 *
-	 * This method is automatically called by the constructor and will by default call
-	 * the getallheaders() function.  It can however be overridden with a subclass or
-	 * called manually providing an arbitrary array of headers to process
-	 *
-	 * @param array $headers An array of headers in the same format as produced by getallheaders() function
-	 */
-	protected function setRequestHeaders($headers = null)
-	{
-		if(is_null($headers))
-			$this->headers = $this->getallheaders();
-		else
-			$this->headers = $headers ;
 	}
 
 	private function normaliseOptions(array $options = array())
@@ -167,19 +185,19 @@ class SimpleCors
 			header('Access-Control-Allow-Credentials: true') ;
 		}
 
-		header("Access-Control-Allow-Origin: {$this->getHeader('Origin')}");
+		header("Access-Control-Allow-Origin: {$this->request->getHeader('Origin')}");
 
 		if ($this->options['maxAge']) {
 			header("Access-Control-Max-Age: {$this->options['maxAge']}");
 		}
 
 		$allowMethods = $this->options['allowedMethods'] === true
-		 ? strtoupper($this->getHeader('Access-Control-Request-Method'))
+		 ? strtoupper($this->request->getHeader('Access-Control-Request-Method'))
 		 : implode(', ', $this->options['allowedMethods']);
 		header("Access-Control-Allow-Methods: $allowMethods");
 
 		$allowHeaders = $this->options['allowedHeaders'] === true
-		 ? strtoupper($this->getHeader('Access-Control-Request-Headers'))
+		 ? strtoupper($this->request->getHeader('Access-Control-Request-Headers'))
 		 : implode(', ', $this->options['allowedHeaders']);
 		if($allowHeaders != '')
 			header("Access-Control-Allow-Headers: $allowHeaders");
@@ -201,8 +219,8 @@ class SimpleCors
 
 		$requestHeaders = array();
 		// if allowedHeaders has been set to true ('*' allow all flag) just skip this check
-		if ($this->options['allowedHeaders'] !== true && $this->hasHeader('Access-Control-Request-Headers')) {
-			$headers        = strtolower($this->getHeader('Access-Control-Request-Headers'));
+		if ($this->options['allowedHeaders'] !== true && $this->request->hasHeader('Access-Control-Request-Headers')) {
+			$headers        = strtolower($this->request->getHeader('Access-Control-Request-Headers'));
 			$requestHeaders = array_filter(explode(',', $headers));
 
 			foreach ($requestHeaders as $header) {
@@ -224,9 +242,9 @@ class SimpleCors
 
 	private function isSameHost()
 	{
-		$url = parse_url($_SERVER['REQUEST_URI']) ;
+		$url = parse_url($this->request->getAbsoluteUrl()) ;
 		$schemeAndHost = "{$url['scheme']}://{$url['host']}" ;
-		return $this->getHeader('Origin') === $schemeAndHost;
+		return $this->request->getHeader('Origin') === $schemeAndHost;
 	}
 
 	private function checkOrigin()
@@ -247,45 +265,20 @@ class SimpleCors
 			return true;
 		}
 
-		$requestMethod = $this->getHeader('Access-Control-Request-Method');
-		if($requestMethod !== '')
+		$requestMethod = $this->request->getHeader('Access-Control-Request-Method');
+		error_log('header [Access-Control-Request-Method]='.json_encode($requestMethod)) ;
+		error_log('headers='.json_encode($this->request->getHeaders())) ;
+		error_log('method='.json_encode($this->request->getMethod())) ;
+		if($requestMethod !== null)
 			return in_array($requestMethod, $this->options['allowedMethods']);
 
 		// Not preflight, so use the REQUESTED METHOD of this request
-		return in_array($_SERVER['REQUEST_METHOD'], $this->options['allowedMethods']);
+		return in_array($this->request->getMethod(), $this->options['allowedMethods']);
 	}
 
 	private function getOrigin()
 	{
-		return $_SERVER['HTTP_ORIGIN'];
-	}
-
-	private function hasHeader($header)
-	{
-		return array_key_exists($header,$this->headers) ;
-	}
-
-	private function getHeader($header)
-	{
-		if(!$this->hasHeader($header,$this->headers))
-			return '' ;
-
-		return $this->headers[$header] ;
-	}
-
-	private function getallheaders()
-	{
-		if (!is_array($_SERVER)) {
-			return array();
-		}
-
-		$headers = array();
-		foreach ($_SERVER as $name => $value) {
-			if (substr($name, 0, 5) == 'HTTP_') {
-				$headers[str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))))] = $value;
-			}
-		}
-		return $headers;
+		return $this->request->getHeader('Origin') ;
 	}
 
 }
