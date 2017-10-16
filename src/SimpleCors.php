@@ -24,8 +24,6 @@ class SimpleCors
 	 'supportsCredentials' => false
 	);
 
-	private $headers = array();
-
 	private $varname = null ;
 
 	private $configPath = null ;
@@ -169,16 +167,6 @@ class SimpleCors
 		return $options;
 	}
 
-	public function sendResponseHeaders()
-	{
-		if(!$this->sendPreflightResponseHeaders())
-			return false ;
-
-		if ($this->options['exposedHeaders']) {
-			header("Access-Control-Expose-Headers: {implode(', ', $this->options['exposedHeaders'])}");
-		}
-	}
-
 	private function sendPreflightResponseHeaders()
 	{
 		if ($this->options['supportsCredentials']) {
@@ -201,6 +189,10 @@ class SimpleCors
 		 : implode(', ', $this->options['allowedHeaders']);
 		if($allowHeaders != '')
 			header("Access-Control-Allow-Headers: $allowHeaders");
+
+		if ($this->options['exposedHeaders']) {
+			header("Access-Control-Expose-Headers: {implode(', ', $this->options['exposedHeaders'])}");
+		}
 
 		return true;
 	}
