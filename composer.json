@@ -3,6 +3,7 @@
   "description": "Simple Library for sending CORS headers",
   "minimum-stability": "dev",
   "type": "library",
+  "keywords": ["simple","cors"],
   "require": {
     "sabre/http": "~4.2"
   },
