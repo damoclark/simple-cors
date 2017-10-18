@@ -22,8 +22,6 @@ namespace damoclark\SimpleCors;
 
 use Sabre\HTTP ;
 
-require_once(__DIR__.'/../vendor/autoload.php') ;
-
 class SimpleCors
 {
 
